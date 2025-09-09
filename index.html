@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Genfox — Multi-Simulation Universal Simulator (Demo)</title>
+  <style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#050620;color:#e6f3ff}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:linear-gradient(90deg,#071430,#0b1730);border-bottom:1px solid rgba(255,255,255,0.03)}
+.logo{font-weight:800;font-size:20px;letter-spacing:1px}
+.tag{opacity:0.85;font-size:13px;margin-left:12px}
+.actions{display:flex;gap:8px}
+.container{max-width:1200px;margin:20px auto;padding:0 18px}
+.card{background:linear-gradient(180deg, rgba(10,18,36,0.6), rgba(6,10,20,0.6));padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 8px 30px rgba(2,6,12,0.6);margin-bottom:12px}
+.workspace{display:flex;gap:16px}
+.leftcol{width:360px;display:flex;flex-direction:column;gap:12px}
+.rightcol{flex:1;display:flex;flex-direction:column;gap:12px}
+.small{font-size:13px}
+.muted{color:#9fb0d9}
+.input{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:#061122;color:#e6f3ff}
+.row{display:flex;gap:8px;align-items:center}
+.btn{background:linear-gradient(90deg,#00d1ff,#7c4dff);border:none;color:#041129;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:#9fb0d9}
+.scenario-list{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto;padding-top:6px}
+.scenario-item{padding:8px;border-radius:8px;background:rgba(255,255,255,0.02);display:flex;justify-content:space-between;align-items:center}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.chip{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:999px;display:flex;gap:8px;align-items:center}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;background:rgba(255,255,255,0.02);padding:8px;border-radius:6px;max-height:200px;overflow:auto}
+.kpis{display:flex;gap:8px;margin-top:8px}
+.kpi{flex:1;background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;text-align:center}
+.kpi-value{font-size:20px;font-weight:700}
+.footer{max-width:1200px;margin:18px auto;color:#8aa0cf;text-align:center;font-size:13px;padding-bottom:30px}
+@media (max-width:900px){.workspace{flex-direction:column}.leftcol{width:100%}}
+
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo">Genfox</div>
+    <div class="tag">Universal Simulator — Multi-Simulation Workspace</div>
+    <div class="actions">
+      <button id="addScenarioBtn" class="btn ghost">New Scenario</button>
+      <button id="exportAllBtn" class="btn">Export All CSVs</button>
+      <button id="printAllBtn" class="btn">Print Report</button>
+    </div>
+  </div>
+
+  <main class="container">
+    <section class="card workspace">
+      <div class="leftcol">
+        <div class="card small">
+          <h3>Scenario Library</h3>
+          <div id="scenarioList" class="scenario-list"></div>
+          <div style="margin-top:8px">
+            <button id="loadSeedBtn" class="btn ghost">Load Seed Scenarios</button>
+          </div>
+        </div>
+
+        <div class="card small">
+          <h3>Create / Edit Scenario</h3>
+          <label class="small muted">Name</label>
+          <input id="scName" class="input" placeholder="Scenario name (e.g., Fusion NYC 2050)"/>
+          <label class="small muted">Domain Hint</label>
+          <select id="scDomain" class="input">
+            <option value="reactor">Reactor</option>
+            <option value="gpu">GPU / Console</option>
+            <option value="city">City / Energy</option>
+            <option value="battery">Battery</option>
+            <option value="biotech">Biotech</option>
+          </select>
+          <label class="small muted">Input (text or JSON)</label>
+          <textarea id="scInput" class="input" rows="4" placeholder='e.g. "Simulate a 2050 fusion reactor powering NYC at 10 GW"'></textarea>
+          <div class="row" style="margin-top:8px">
+            <select id="scDuration" class="input small"><option value="5">5 min</option><option value="10">10 min</option><option value="30">30 min</option></select>
+            <select id="scMode" class="input small"><option value="today">Today</option><option value="tomorrow">Tomorrow</option></select>
+            <button id="saveScenarioBtn" class="btn">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="rightcol">
+        <div class="card">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <h3>Workspace — Active Scenarios</h3>
+            <div class="small muted">Overlay multiple simulations and compare</div>
+          </div>
+          <div id="activeChips" class="chips"></div>
+          <canvas id="overlayChart" height="260"></canvas>
+          <div style="margin-top:10px" class="row">
+            <button id="runAllBtn" class="btn">Run All</button>
+            <button id="clearBtn" class="btn ghost">Clear</button>
+          </div>
+        </div>
+
+        <div class="card small">
+          <h4>Selected Scenario Details</h4>
+          <pre id="scDetails" class="mono">No scenario selected</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Results — Time-series & KPIs</h3>
+      <div class="row">
+        <div style="flex:1">
+          <h4>Selected Scenario Time-series (first 20 rows)</h4>
+          <pre id="tsOut" class="mono">—</pre>
+        </div>
+        <div style="width:320px">
+          <h4>KPIs</h4>
+          <div class="kpis">
+            <div class="kpi"><div id="kpifps" class="kpi-value">—</div><div class="kpi-label">Avg FPS</div></div>
+            <div class="kpi"><div id="kpipower" class="kpi-value">—</div><div class="kpi-label">Avg Power (kW)</div></div>
+            <div class="kpi"><div id="kpitemp" class="kpi-value">—</div><div class="kpi-label">Avg Temp (°C)</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer small muted">Genfox Multi-Simulation Demo • Client-side heuristic engine • Safe & local</footer>
+  <script>
+// app.js - Genfox Multi-Simulation Demo (client-side)
+(function(){
+  // Utilities
+  function tryParseJSON(s){ try{ return JSON.parse(s); }catch(e){ return null; } }
+  function uid(){ return Math.random().toString(36).slice(2,9); }
+  function now(){ return new Date().toISOString(); }
+
+  // Heuristic UDL parser (same as before)
+  function parseUDL(input, domainHint){
+    if(!input || input.trim()==='') return {type:domainHint||'generic', properties:{complexity:6}};
+    const asJSON = tryParseJSON(input);
+    if(asJSON && typeof asJSON === 'object') return asJSON;
+    const text = input.toLowerCase();
+    const desc = {type:domainHint||'unknown', subtype:'', properties:{}};
+    if(text.includes('gpu')||text.includes('graphics')||text.includes('ps5')||text.includes('console')) desc.type='gpu';
+    if(text.includes('battery')||text.includes('charge')||text.includes('heat')) desc.type='battery';
+    if(text.includes('fusion')||text.includes('reactor')||text.includes('nuclear')) desc.type='reactor';
+    if(text.includes('city')||text.includes('grid')||text.includes('power')||text.includes('energy')) desc.type='city';
+    if(text.includes('drug')||text.includes('molecule')||text.includes('protein')||text.includes('biotech')) desc.type='biotech';
+    const yearMatch = text.match(/20[2-9]\d|21\d{2}|20\d{2}/);
+    if(yearMatch) desc.properties.target_year = parseInt(yearMatch[0]);
+    if(text.includes('simple')) desc.properties.complexity = 3;
+    else if(text.includes('complex')||text.includes('massive')) desc.properties.complexity = 9;
+    else desc.properties.complexity = 6;
+    const m2 = text.match(/(\d+(?:\.\d+)?)\s*(mw|kw|w|ghz|mhz|gw)/);
+    if(m2){ const val=parseFloat(m2[1]); const unit=m2[2]; if(unit==='mw') desc.properties.power_mw=val; else if(unit==='kw') desc.properties.power_kw=val; else if(unit==='gw') desc.properties.power_kw=val*1000; else if(unit==='w') desc.properties.power_w=val; else if(unit==='ghz'||unit==='mhz') desc.properties.clock_mhz=val; }
+    if(desc.type==='gpu'){ desc.properties.memory_gb = desc.properties.memory_gb||16; desc.properties.power_scale_kw = desc.properties.power_scale_kw||0.35; }
+    if(desc.type==='battery'){ desc.properties.capacity_Wh = desc.properties.capacity_Wh||20000; desc.properties.c_rate = desc.properties.c_rate||0.5; }
+    if(desc.type==='city'){ desc.properties.population = desc.properties.population||1000000; desc.properties.avg_power_kw_per_capita = desc.properties.avg_power_kw_per_capita||1.0; }
+    return desc;
+  }
+
+  // Heuristic simulator
+  function genericSim(descriptor, duration_minutes){
+    const points = Math.max(6, Math.round(duration_minutes * 6));
+    const t = Array.from({length:points}, (_,i)=>parseFloat((i*(duration_minutes*60/points)).toFixed(2)));
+    const complexity = Number(descriptor.properties && descriptor.properties.complexity ? descriptor.properties.complexity : 5);
+    const power_scale = Number(descriptor.properties && descriptor.properties.power_scale_kw ? descriptor.properties.power_scale_kw : 0.5);
+    const frame_time = [], util = [], temp = [], power = [];
+    for(let i=0;i<points;i++){
+      const noise = (Math.random()*0.1 - 0.05)*complexity;
+      const ft = Math.max(0.1, (16.7 * (1 + (complexity-5)*0.12)) * (1 + noise));
+      const u = Math.min(100, 40 + complexity*5 + (Math.random()*10-5));
+      const temperature = Math.round(30 + u/100.0*50 + (Math.random()*4-2));
+      const p = parseFloat((power_scale * (u/100.0) + (Math.random()*0.1-0.05)).toFixed(4));
+      frame_time.push(+ft.toFixed(3)); util.push(+u.toFixed(2)); temp.push(+temperature); power.push(p);
+    }
+    const avg_fps = +(1000.0 / (frame_time.reduce((a,b)=>a+b,0)/frame_time.length + 1e-9)).toFixed(2);
+    return {t_sec:t, frame_time_ms:frame_time, util_pct:util, temp_C:temp, power_kW:power, avg_fps, summary:`Heuristic sim for ${descriptor.type || 'unknown'}`};
+  }
+
+  // Feasibility heuristic
+  function feasibilityScore(descriptor){
+    let base = 50;
+    const c = Number(descriptor.properties && descriptor.properties.complexity ? descriptor.properties.complexity : 5);
+    base -= (c-5)*4;
+    if(descriptor.properties && descriptor.properties.target_year){
+      const years = Math.max(0, descriptor.properties.target_year - (new Date().getFullYear()));
+      base += Math.min(40, years*1.5);
+    }
+    base = Math.max(0, Math.min(100, Math.round(base)));
+    return base;
+  }
+
+  // CSV export for a scenario
+  function exportCSV(scenario){
+    const ts = scenario.lastResult && scenario.lastResult.ts;
+    if(!ts) return alert('No result to export for '+scenario.name);
+    const rows = ['t_sec,frame_time_ms,power_kW,util_pct,temp_C'];
+    for(let i=0;i<ts.t_sec.length;i++){ rows.push([ts.t_sec[i], ts.frame_time_ms[i], ts.power_kW[i], ts.util_pct[i], ts.temp_C[i]].join(',')); }
+    const csv = rows.join('\n'); const blob = new Blob([csv], {type:'text/csv'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=scenario.name.replace(/\s+/g,'_')+'_'+(new Date().toISOString())+'.csv'; a.click(); URL.revokeObjectURL(url);
+  }
+
+  // App state
+  const scenarios = []; // {id,name,domain,input,duration,mode,lastResult}
+  const colors = ['#00d1ff','#7c4dff','#ff7a59','#ffd166','#6be6a3','#ff86d4','#9ad0ff'];
+
+  // DOM refs
+  const scenarioList = document.getElementById('scenarioList');
+  const addScenarioBtn = document.getElementById('addScenarioBtn');
+  const loadSeedBtn = document.getElementById('loadSeedBtn');
+  const saveScenarioBtn = document.getElementById('saveScenarioBtn');
+  const scName = document.getElementById('scName');
+  const scDomain = document.getElementById('scDomain');
+  const scInput = document.getElementById('scInput');
+  const scDuration = document.getElementById('scDuration');
+  const scMode = document.getElementById('scMode');
+  const runAllBtn = document.getElementById('runAllBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const overlayChartCtx = document.getElementById('overlayChart').getContext('2d');
+  const activeChips = document.getElementById('activeChips');
+  const scDetails = document.getElementById('scDetails');
+  const tsOut = document.getElementById('tsOut');
+  const kpifps = document.getElementById('kpifps'), kpipower = document.getElementById('kpipower'), kpitemp = document.getElementById('kpitemp');
+  const exportAllBtn = document.getElementById('exportAllBtn'), printAllBtn = document.getElementById('printAllBtn');
+
+  // Chart
+  let overlayChart = new Chart(overlayChartCtx, {type:'line',data:{labels:[],datasets:[]},options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{x:{display:true,title:{display:true,text:'Time (s)'}},y:{display:true}}}});
+
+  function renderScenarioList(){
+    scenarioList.innerHTML='';
+    scenarios.forEach(s=>{
+      const div = document.createElement('div'); div.className='scenario-item';
+      const left = document.createElement('div'); left.style.flex='1';
+      left.innerHTML = `<strong>${s.name}</strong><div class="small muted">${s.domain} • ${s.duration} min • ${s.mode}</div>`;
+      const actions = document.createElement('div');
+      const addBtn = document.createElement('button'); addBtn.className='btn ghost'; addBtn.textContent='Open'; addBtn.onclick = ()=>{ openScenario(s.id); };
+      const runBtn = document.createElement('button'); runBtn.className='btn'; runBtn.textContent='Run'; runBtn.style.marginLeft='6px'; runBtn.onclick = ()=>{ runScenario(s.id); };
+      const delBtn = document.createElement('button'); delBtn.className='btn ghost'; delBtn.textContent='Delete'; delBtn.style.marginLeft='6px'; delBtn.onclick = ()=>{ deleteScenario(s.id); };
+      actions.appendChild(addBtn); actions.appendChild(runBtn); actions.appendChild(delBtn);
+      div.appendChild(left); div.appendChild(actions);
+      scenarioList.appendChild(div);
+    });
+  }
+
+  function addScenarioFromForm(){
+    const id = uid(); const name = scName.value.trim() || ('Scenario-'+id); const domain = scDomain.value; const input = scInput.value.trim(); const duration = Number(scDuration.value); const mode = scMode.value;
+    const s = {id,name,domain,input,duration,mode,lastResult:null};
+    scenarios.push(s); renderScenarioList(); clearForm(); openScenario(id);
+  }
+  function clearForm(){ scName.value=''; scInput.value=''; scDuration.value='5'; scMode.value='today'; }
+
+  function deleteScenario(id){ const idx = scenarios.findIndex(x=>x.id===id); if(idx>=0){ scenarios.splice(idx,1); renderScenarioList(); renderActiveChips(); } }
+
+  function openScenario(id){
+    const s = scenarios.find(x=>x.id===id); if(!s) return;
+    scName.value = s.name; scDomain.value = s.domain; scInput.value = s.input; scDuration.value = s.duration; scMode.value = s.mode;
+    displayScenarioDetails(s);
+  }
+
+  function displayScenarioDetails(s){
+    scDetails.textContent = JSON.stringify(s, null, 2);
+    if(s.lastResult && s.lastResult.ts){ displayTS(s.lastResult.ts); updateKPIs(s.lastResult.ts); } else { tsOut.textContent='No results yet'; kpifps.textContent='—'; kpipower.textContent='—'; kpitemp.textContent='—'; }
+  }
+
+  function displayTS(ts){
+    const rows = ['t_sec,frame_time_ms,power_kW,util_pct,temp_C']; for(let i=0;i<ts.t_sec.length;i++){ rows.push(`${ts.t_sec[i]},${ts.frame_time_ms[i]},${ts.power_kW[i]},${ts.util_pct[i]},${ts.temp_C[i]}`); }
+    tsOut.textContent = rows.slice(0,21).join('\n');
+  }
+  function updateKPIs(ts){ kpifps.textContent = ts.avg_fps; kpipower.textContent = (ts.power_kW.reduce((a,b)=>a+b,0)/ts.power_kW.length).toFixed(3); kpitemp.textContent = (ts.temp_C.reduce((a,b)=>a+b,0)/ts.temp_C.length).toFixed(1); }
+
+  function runScenario(id){
+    const s = scenarios.find(x=>x.id===id); if(!s) return;
+    const desc = parseUDL(s.input, s.domain);
+    // apply tomorrow mode adjustments
+    if(s.mode==='tomorrow' && desc.properties){
+      const year = desc.properties.target_year || (new Date().getFullYear()+10);
+      const years = Math.max(0, year - (new Date().getFullYear()));
+      if(desc.type==='gpu'){ desc.properties.memory_gb = (desc.properties.memory_gb||16) * Math.pow(1.15, years); desc.properties.power_scale_kw = Math.max(0.01,(desc.properties.power_scale_kw||0.35)*Math.pow(0.95, years)); }
+      if(desc.type==='reactor'){ desc.properties.power_kw = desc.properties.power_kw || (desc.properties.power_mw? desc.properties.power_mw*1000 : 10000); }
+    }
+    const res = genericSim(desc, s.duration);
+    s.lastResult = {descriptor:desc, ts:res, time: now(), feasibility: feasibilityScore(desc)};
+    renderActiveChips(); displayScenarioDetails(s);
+  }
+
+  function runAll(){ scenarios.forEach(s=> runScenario(s.id)); renderOverlayChart(); }
+
+  function renderActiveChips(){
+    activeChips.innerHTML='';
+    scenarios.forEach((s, i)=>{
+      const chip = document.createElement('div'); chip.className='chip'; chip.style.borderLeft = '4px solid '+colors[i%colors.length];
+      chip.innerHTML = `<div style="min-width:8px"></div><div><strong>${s.name}</strong><div class="small muted">${s.domain} • ${s.duration}m</div></div>`;
+      const viewBtn = document.createElement('button'); viewBtn.className='btn ghost'; viewBtn.textContent='View'; viewBtn.style.marginLeft='8px'; viewBtn.onclick = ()=>{ openScenario(s.id); };
+      const exportBtn = document.createElement('button'); exportBtn.className='btn'; exportBtn.textContent='CSV'; exportBtn.style.marginLeft='8px'; exportBtn.onclick = ()=>{ exportCSV(s); };
+      chip.appendChild(viewBtn); chip.appendChild(exportBtn);
+      activeChips.appendChild(chip);
+    });
+    renderOverlayChart();
+  }
+
+  function renderOverlayChart(){
+    // Build overlay datasets from scenarios with results
+    const datasets = []; let labels = null;
+    scenarios.forEach((s,i)=>{
+      if(s.lastResult && s.lastResult.ts){
+        const ts = s.lastResult.ts;
+        if(!labels) labels = ts.t_sec.map(v=>v.toString());
+        datasets.push({label: s.name + ' — Power (kW)', data: ts.power_kW, borderColor: colors[i%colors.length], tension:0.2, fill:false});
+      }
+    });
+    overlayChart.data.labels = labels || [];
+    overlayChart.data.datasets = datasets;
+    overlayChart.update();
+  }
+
+  function exportAllCSVs(){
+    const any = scenarios.some(s=>s.lastResult && s.lastResult.ts);
+    if(!any) return alert('No simulation results to export. Run scenarios first.');
+    scenarios.forEach(s=> { if(s.lastResult) exportCSV(s); });
+  }
+
+  // seed scenarios helper
+  function seedScenarios(){
+    const seeds = [
+      {name:'PS-level GPU (2035)', domain:'gpu', input:'Simulate a 2035 PS-level GPU with ray tracing, complexity high, memory 24 GB', duration:5, mode:'tomorrow'},
+      {name:'Fusion reactor NYC (2050)', domain:'reactor', input:'Simulate a 2050 fusion reactor powering NYC at 10000 kW', duration:10, mode:'tomorrow'},
+      {name:'City energy mix (2030)', domain:'city', input:'Simulate a mid-sized city with 2,000,000 population, solar 500 MW, storage 1000 MWh', duration:10, mode:'today'}
+    ];
+    seeds.forEach(s=> { s.id=uid(); s.lastResult=null; scenarios.push(s); });
+    renderScenarioList();
+  }
+
+  // UI events wiring
+  addScenarioBtn.addEventListener('click', ()=>{ scName.value=''; scInput.value=''; scDomain.value='reactor'; scDuration.value='5'; scMode.value='today'; });
+  saveScenarioBtn.addEventListener('click', addScenarioFromForm);
+  loadSeedBtn.addEventListener('click', ()=>{ seedScenarios(); });
+  runAllBtn.addEventListener('click', ()=>{ runAll(); });
+  clearBtn.addEventListener('click', ()=>{ scenarios.length=0; renderScenarioList(); renderActiveChips(); scDetails.textContent='No scenario selected'; tsOut.textContent='—'; kpifps.textContent='—'; kpipower.textContent='—'; kpitemp.textContent='—'; });
+  exportAllBtn.addEventListener('click', ()=>{ exportAllCSVs(); });
+  printAllBtn.addEventListener('click', ()=>{ window.print(); });
+
+  // initial seed
+  seedScenarios();
+  renderScenarioList();
+})();
+</script>
+</body>
+</html>
